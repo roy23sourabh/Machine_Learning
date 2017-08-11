@@ -1,0 +1,87 @@
+---
+title: "Week 4 assigment;Weight lifting dataset "
+author: "Sourabh Roy"
+date: "8/11/2017"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+```{r global_options,include=FALSE}
+knitr::opts_chunk$set(echo=FALSE,results="hide",message = FALSE,warning = FALSE,fig.width = 4,fig.height = 6)
+require(GGally)
+require(ggplot2)
+require(caret)
+```
+
+## Synopsis
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+## Downloading data
+```{r downloadData,echo=TRUE,cache=TRUE}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",destfile = "./train.csv" )
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",destfile = "./test.csv" )
+
+```
+## Loading Data
+```{r loadData,echo=TRUE,cache=TRUE}
+training <- data.table::fread("./train.csv",sep=",",header = TRUE,stringsAsFactors = FALSE,na.strings = c("NA",""))
+
+testing <- data.table::fread("./test.csv",sep = ",",header = TRUE,stringsAsFactors = FALSE,na.strings = c("NA",""))
+```
+
+## Tidying  Data  
+
+Check  data for  missing values ,if missing values are way too much we will ignore the variable(easiest way),if missing values are within permissible limit we can go for imputing missing data as a pre process before we start modelling.
+```{r cleanData1,echo=TRUE}
+dim(training)
+sapply(training, function(x) sum(is.na(x)))
+sapply(testing, function(x) sum(is.na(x)))
+```  
+We can observe that we have 19622 observations 160 variables in the training data set 
+out of which few variables have 19216 missing values(or 97.93%) which is way too much to include them in our model.Hence we have to give these variables a skip.
+
+```{r cleanData2,echo=TRUE}
+Var <- sapply(training, function(x) ifelse(sum(is.na(x)) >0 ,"Exclude","Include"))
+#We have variables that needs to be excluded
+exVar <- which(Var == "Exclude")
+```
+New dataset for training and testing data.Also we observe that the variable such as user_name and V1, raw_timestamps and cvtd_timestamp is not useful for our analysis.
+Hence our final training and testing data set as below
+```{r cleanData3,echo=TRUE}
+trainDF <- dplyr::select(training,-c(exVar,1:5))
+testDF <- dplyr::select(testing,-c(exVar,1:5))
+```
+
+## Exploratory Data Analysis
+
+We are interested to identify how "classe" is related with other variables such as accelerometers on the belt, forearm, arm, and dumbell.Also correlation with other variables.
+Based on  indvidual plots from training data we can come to conclusion that we have a non linear data.Hence linear regression models would not be a choice.We would start with  decision tree/classification to predict the outcome and further with other models as and when required for accuracy.
+
+
+```{r modelSelection,echo=TRUE,results='markup'}
+set.seed(1245)
+##Classification Tree
+modFit <- train(classe~.,method="rpart",data = trainDF,trControl=trainControl(allowParallel = TRUE))
+pred1 <- predict(modFit,trainDF)
+confusionMatrix(pred1,trainDF$classe)  ## 49.56% accuracy
+## Linear Discriminant Analyses
+modFit2 <- train(classe~.,data = trainDF,method = "lda")
+pred2 <- predict(modFit2,trainDF)
+confusionMatrix(pred2,trainDF$classe) ## 71.63%  
+## Boosting with cross validation so as to avoid overfitting ( with K=4 folds)
+modFit4 <- train(classe~.,method="gbm",data = trainDF,trControl=trainControl(allowParallel = TRUE,method = "cv",number = 4))
+pred4 <- predict(modFit4,trainDF)
+confusionMatrix(pred4,trainDF$classe)  ## 99.38% 
+predFinal <- predict(modFit4,testDF)
+predFinal
+```
+
+## Appendixes
+  
+- System specifications : 3.1Ghz Intel Core i7, 16 GB 1867 MHz DDR3, Mac OS Sierra
+- Session Info :
+```{r sessionInfoDetails,echo=FALSE,results='markup'}
+sessionInfo()
+```
